@@ -2,3 +2,7 @@ https://huggingface.co/datasets/mindweave/web-server-logs
 pip install pandas
 pip install huggingface_hub
 pip install pandas numpy scikit-learn matplotlib seaborn
+pip install pyarrow
+pip install fastparquet
+pip install joblib
+pip install flask fastapi uvicorn
