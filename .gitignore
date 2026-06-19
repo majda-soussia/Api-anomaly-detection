@@ -2,12 +2,15 @@ etl1.ipynb
 __pycache__/
 env/
 venv/
-*.pkl
-
+data/
+Ml/*.keras
+Ml/*.json
 
 # Environment variables
 .env
 # Large data/model files
 data/*.pkl
 data/*.pickle
+Ml/*model*
 data/*model*
+notebooks/kt_results
