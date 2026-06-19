@@ -1,0 +1,13 @@
+etl1.ipynb
+__pycache__/
+env/
+venv/
+*.pkl
+
+
+# Environment variables
+.env
+# Large data/model files
+data/*.pkl
+data/*.pickle
+data/*model*
