@@ -8,3 +8,16 @@ pip install joblib
 pip install flask fastapi uvicorn
 pip install scikit-learn
 pip install jupyter ipykernel
+#Frontend
+npm create vite@latest 
+npm install
+npm install axios
+npm install react-router-dom
+npm install socket.io-client
+npm install recharts
+#Backend
+npm init -y
+npm install express pg dotenv cors axios
+npm install socket.io
+npm install dotenv
+npm install --save-dev nodemon
