@@ -5,12 +5,39 @@ venv/
 data/
 Ml/*.keras
 Ml/*.json
+*.pyc
+*.pyo
+*.pyd
+ML/*.pkl
+notebooks/kt_results
+models/
+# OS generated files
+.DS_Store
+Thumbs.db
+
+#Jupyter
+
+.ipynb_checkpoints/
 
 # Environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 # Large data/model files
 data/*.pkl
 data/*.pickle
-Ml/*model*
+ML/*model*
 data/*model*
-notebooks/kt_results
+notebooks/kt_results\
+
+#Node.js / React
+node_modules/
+dist/
+build/
+
+#Temporary files
+*.log
+*.tmp
