@@ -8,6 +8,8 @@ pip install joblib
 pip install flask fastapi uvicorn
 pip install scikit-learn
 pip install jupyter ipykernel
+pip install fastapi uvicorn
+pip install pytest
 #Frontend
 npm create vite@latest 
 npm install

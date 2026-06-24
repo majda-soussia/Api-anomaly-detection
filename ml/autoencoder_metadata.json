@@ -80,7 +80,7 @@
     "false_negatives": 4,
     "true_positives": 30
   },
-  "trained_on": "2026-06-19 14:42",
+  "trained_on": "2026-06-24 13:34",
   "train_samples": 2166,
   "test_samples": 889,
   "dataset": "mindweave/web-server-logs",
