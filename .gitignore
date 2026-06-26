@@ -11,3 +11,4 @@ venv/
 data/*.pkl
 data/*.pickle
 data/*model*
+backend/*node_modules*

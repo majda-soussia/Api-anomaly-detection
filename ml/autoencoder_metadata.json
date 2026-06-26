@@ -1,5 +1,5 @@
 {
-  "threshold": 0.4462820589542389,
+  "threshold": 0.4929278492927551,
   "threshold_percentile": 99,
   "input_dim": 46,
   "features": [
@@ -71,16 +71,16 @@
     "l2_reg": 0.0
   },
   "metrics": {
-    "f1": 0.7895,
-    "precision": 0.7143,
+    "f1": 0.7692,
+    "precision": 0.6818,
     "recall": 0.8824,
-    "auc": 0.9909,
-    "true_negatives": 843,
-    "false_positives": 12,
+    "auc": 0.993,
+    "true_negatives": 841,
+    "false_positives": 14,
     "false_negatives": 4,
     "true_positives": 30
   },
-  "trained_on": "2026-06-19 12:32",
+  "trained_on": "2026-06-26 10:41",
   "train_samples": 2166,
   "test_samples": 889,
   "dataset": "mindweave/web-server-logs",
