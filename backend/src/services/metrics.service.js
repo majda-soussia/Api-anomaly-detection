@@ -2,7 +2,6 @@ const pool = require('../../config/db');
 
 /**
  * Récupère les dernières métriques par serveur.
- * Hypothèse de schéma : table `server_metrics`
  * (server_id, timestamp, latency_ms, rps, cpu_usage, status)
  */
 async function getLatestMetrics() {
@@ -14,7 +13,7 @@ async function getLatestMetrics() {
       rps,
       cpu_usage,
       status
-    FROM server_metrics
+    FROM test_predictions
     ORDER BY server_id, timestamp DESC;
   `;
   const { rows } = await pool.query(query);
@@ -27,8 +26,13 @@ async function getLatestMetrics() {
  */
 async function getMetricsHistory(limitMinutes = 15) {
   const query = `
-    SELECT server_id, timestamp, latency_ms, rps
-    FROM server_metrics
+    SELECT
+      server_id,
+      timestamp,
+      request_count,
+      avg_response_time,
+      anomaly_score
+    FROM test_predictions
     WHERE timestamp >= NOW() - INTERVAL '${limitMinutes} minutes'
     ORDER BY timestamp ASC;
   `;
