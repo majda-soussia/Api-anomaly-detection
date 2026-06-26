@@ -23,3 +23,5 @@ npm install express pg dotenv cors axios
 npm install socket.io
 npm install dotenv
 npm install --save-dev nodemon
+
+pip install sqlalchemy psycopg2-binary
