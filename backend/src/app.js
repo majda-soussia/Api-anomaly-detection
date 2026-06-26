@@ -6,7 +6,6 @@ const healthRoutes = require('./routes/health.routes');
 
 const app = express();
 console.log('metricsRoutes:', typeof metricsRoutes);
-console.log('healthRoutes:', typeof healthRoutes);console.log('metricsRoutes:', typeof metricsRoutes);
 console.log('healthRoutes:', typeof healthRoutes);
 app.use(cors());
 app.use(express.json());
