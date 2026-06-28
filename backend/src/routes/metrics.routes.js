@@ -1,10 +1,8 @@
-const healthService = require('../services/health.service');
+const express = require('express');
+const router = express.Router();
 
-async function getHealth(req, res) {
-  const health = await healthService.getSystemHealth();
-  const httpStatus = health.overall === 'critical' ? 503 : 200;
-  res.status(httpStatus).json(health);
-}
+const { getMetrics } = require('../controllers/metrics.controller');
 
-//module.exports = { getHealth };
+router.get('/', getMetrics);
+
 module.exports = router;
