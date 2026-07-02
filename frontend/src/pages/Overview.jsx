@@ -1,17 +1,14 @@
-// frontend/src/pages/Overview.jsx
 import { useState, useEffect } from 'react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from 'recharts';
-import { useMetricsSocket } from '../hooks/useMetricsSocket';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useMetricsSocket } from '../hooks/useSocket';
+import Card from '../components/ui/Card';
+import { EmptyState } from '../components/ui/StateViews';
 
 const MAX_POINTS = 30;
-
-// Palette de couleurs pour différencier les serveurs sur le graphe
-const COLORS = ['#4ec9b0', '#569cd6', '#ce9178', '#c586c0', '#dcdcaa'];
+const RESOLVED_COLORS = ['#5b8def', '#22c55e', '#f59e0b', '#c586c0', '#8ec8ff'];
 
 export default function Overview() {
-  const metrics = useMetricsSocket(); // tableau de serveurs à chaque tick
+  const { metrics } = useMetricsSocket();
   const [history, setHistory] = useState([]);
   const [serverIds, setServerIds] = useState([]);
 
@@ -19,8 +16,6 @@ export default function Overview() {
     if (!metrics || metrics.length === 0) return;
 
     const time = new Date().toLocaleTimeString();
-
-    // On construit UN point qui contient les valeurs de TOUS les serveurs
     const point = { time };
     metrics.forEach((server) => {
       point[`rps_${server.server_id}`] = server.request_count;
@@ -29,11 +24,8 @@ export default function Overview() {
 
     setHistory((prev) => [...prev, point].slice(-MAX_POINTS));
 
-    // IMPORTANT : on ne réduit jamais la liste des serverIds connus,
-    // on l'étend seulement — sinon une ligne disparaît dès qu'un tick
-    // n'a temporairement pas ramené ce serveur (cas désormais rare
-    // avec le curseur par serveur côté backend, mais on garde ce
-    // garde-fou pour ne plus jamais perdre une courbe à l'affichage).
+    // IMPORTANT : on ne réduit jamais la liste des serverIds connus (voir
+    // note originale) — garde-fou pour ne jamais perdre une courbe.
     setServerIds((prev) => {
       const incoming = metrics.map((s) => s.server_id);
       const merged = Array.from(new Set([...prev, ...incoming]));
@@ -43,59 +35,82 @@ export default function Overview() {
   }, [metrics]);
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Overview</h2>
+    <div>
+      <div style={{ marginBottom: 'var(--space-6)' }}>
+        <h2 style={{ fontSize: 20, marginBottom: 4 }}>Overview</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Latence et trafic en temps réel, tous serveurs.</p>
+      </div>
 
-      {!metrics && <p>Connexion au serveur en cours...</p>}
+      {!metrics ? (
+        <Card style={{ padding: 0 }}>
+          <EmptyState title="Connexion au serveur en cours…" description="En attente du premier tick de métriques." />
+        </Card>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          <ChartCard title="Latence moyenne par serveur (ms)">
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={history}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="time" tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} />
+                <YAxis domain={[0, 1500]} tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {serverIds.map((id, index) => (
+                  <Line
+                    key={id}
+                    type="linear"
+                    dataKey={`latency_${id}`}
+                    name={`Serveur ${id}`}
+                    stroke={RESOLVED_COLORS[index % RESOLVED_COLORS.length]}
+                    dot={false}
+                    connectNulls
+                    isAnimationActive={false}
+                    strokeWidth={2}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
 
-      <h3>Latence moyenne par serveur (ms)</h3>
-      <ResponsiveContainer width="100%" height={250}>
-        <LineChart data={history}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="time" />
-          {/* domaine fixe : évite que l'axe Y change brutalement d'échelle
-              à chaque tick (200 -> 1400 -> 200), ce qui donnait l'impression
-              de courbes qui "débordent" du cadre */}
-          <YAxis domain={[0, 1500]} />
-          <Tooltip />
-          <Legend />
-          {serverIds.map((id, index) => (
-            <Line
-              key={id}
-              type="linear"            /* segments droits entre vraies valeurs, pas de lissage qui déborde */
-              dataKey={`latency_${id}`}
-              name={`Serveur ${id}`}
-              stroke={COLORS[index % COLORS.length]}
-              dot={false}
-              connectNulls            /* relie les points même si un serveur manque un tick ponctuel */
-              isAnimationActive={false}
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-
-      <h3>Requêtes (RPS) par serveur</h3>
-      <ResponsiveContainer width="100%" height={250}>
-        <LineChart data={history}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="time" />
-          <YAxis domain={[0, 'auto']} allowDecimals={false} />
-          <Tooltip />
-          <Legend />
-          {serverIds.map((id, index) => (
-            <Line
-              key={id}
-              type="linear"
-              dataKey={`rps_${id}`}
-              name={`Serveur ${id}`}
-              stroke={COLORS[index % COLORS.length]}
-              dot={false}
-              connectNulls
-              isAnimationActive={false}
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
+          <ChartCard title="Requêtes (RPS) par serveur">
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={history}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="time" tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} />
+                <YAxis domain={[0, 'auto']} allowDecimals={false} tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {serverIds.map((id, index) => (
+                  <Line
+                    key={id}
+                    type="linear"
+                    dataKey={`rps_${id}`}
+                    name={`Serveur ${id}`}
+                    stroke={RESOLVED_COLORS[index % RESOLVED_COLORS.length]}
+                    dot={false}
+                    connectNulls
+                    isAnimationActive={false}
+                    strokeWidth={2}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+      )}
     </div>
+  );
+}
+
+const tooltipStyle = { background: 'var(--bg-surface-raised)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 12 };
+
+function ChartCard({ title, children }) {
+  return (
+    <Card style={{ padding: 'var(--space-5)' }}>
+      <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 'var(--space-4)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+        {title}
+      </h3>
+      {children}
+    </Card>
   );
 }
