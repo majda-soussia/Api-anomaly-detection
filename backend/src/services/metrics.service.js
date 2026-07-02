@@ -1,30 +1,6 @@
 const pool = require('../config/db');
-
-/**
- * SIMULATION TEMPS RÉEL — curseur indépendant PAR SERVEUR
- *
- * test_predictions est un instantané figé du test set. Pour simuler un flux
- * live, chaque serveur a SA PROPRE liste de lignes (triées par timestamp) et
- * SON PROPRE curseur qui avance indépendamment des autres, puis boucle à 0.
- *
- * Pourquoi par serveur et pas un curseur global unique :
- * les serveurs n'ont pas forcément des mesures synchronisées au même
- * timestamp exact dans le dataset. Un curseur global basé sur "le timestamp X"
- * ne renvoie alors parfois 1 serveur, parfois 2, jamais les 3 ensemble.
- * Avec un curseur par serveur, chaque tick renvoie TOUJOURS une ligne
- * pour CHAQUE serveur, donc les 3 courbes restent toujours alignées.
- *
- * État en mémoire (process Node) — repart à 0 au redémarrage du serveur,
- * ce qui est suffisant pour une démo / simulation.
- */
-
-let rowsByServer = null;     // { server_id: [ {row}, {row}, ... ] }  triées par timestamp ASC
-let cursorByServer = null;   // { server_id: index courant }
-
-/**
- * Charge une seule fois toutes les lignes de test_predictions,
- * regroupées par server_id et triées par timestamp.
- */
+let rowsByServer = null;     
+let cursorByServer = null;  
 async function loadDataIfNeeded() {
   if (rowsByServer) return;
 

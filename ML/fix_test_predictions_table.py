@@ -126,7 +126,7 @@ print(test_results[['server_id', 'timestamp', 'anomaly_score', 'is_anomaly', 'st
 # ─────────────────────────────────────────────────────────
 # 6. Remplacer la table PostgreSQL existante
 # ─────────────────────────────────────────────────────────
-engine = create_engine("postgresql://majda:majda@localhost:5432/monitoring_db")
+engine = create_engine("postgresql://postgres.eezxgekvdyjorokuoowc:Stageete2026@aws-1-eu-central-1.pooler.supabase.com:6543/postgres")
 
 test_results.to_sql(
     name="test_predictions",

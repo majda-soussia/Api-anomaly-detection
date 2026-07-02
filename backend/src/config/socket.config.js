@@ -1,12 +1,15 @@
-// backend/src/config/socket.config.js
+const env = require('./env');
+
 const socketConfig = {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173', // ← vérifie ce fallback aussi
+    origin: env.CLIENT_URL,
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  metricsEmitInterval: parseInt(process.env.METRICS_EMIT_INTERVAL, 10) || 2000,
+  metricsEmitInterval: env.METRICS_EMIT_INTERVAL_MS,
   transports: ['websocket', 'polling'],
+  pingInterval: 25000, // server pings client every 25s
+  pingTimeout: 20000, // disconnect if no pong within 20s of a ping
 };
 
 module.exports = socketConfig;

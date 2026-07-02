@@ -1,63 +1,41 @@
-/**
- * predict.service.js
- * ------------------
- * Appelle le microservice FastAPI (Hybrid Autoencoder + Isolation Forest)
- * et sauvegarde l'alerte en base si la décision est CRITICAL ou WARNING.
- *
- * Cooldown : évite de créer plusieurs alertes identiques en moins de
- * COOLDOWN_MS millisecondes pour le même niveau de décision.
- */
+const db = require('../config/db');
+const mlServiceClient = require('../utils/mlServiceClient');
+const cache = require('../config/redis');
+const { emitNewAlert } = require('../websocket/socket');
+const env = require('../config/env');
+const logger = require('../config/logger');
 
-const axios = require('axios');
-const pool = require('../config/db');
+const ALERTS_CACHE_PREFIX = 'alerts:list:';
 
-const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8001';
-const COOLDOWN_MS = parseInt(process.env.ALERT_COOLDOWN_MS || '300000'); // 5 min par défaut
-
-/**
- * Appelle POST /predict sur le microservice FastAPI.
- * @param {Object} features - Les 46 features de la fenêtre de 5 min
- * @returns {Object} Réponse complète du microservice
- */
-async function callFastAPI(features) {
-  const response = await axios.post(`${FASTAPI_URL}/predict`, features, {
-    timeout: 10000,
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.data;
+async function callMLService(features) {
+  const { server_id, ...mlFeatures } = features;
+  return mlServiceClient.predict(mlFeatures);
 }
 
-/**
- * Vérifie si une alerte identique a été créée récemment (cooldown).
- * @param {string} decision - 'CRITICAL' ou 'WARNING'
- * @returns {boolean} true si on est encore dans le cooldown
- */
-async function isInCooldown(decision) {
-  const result = await pool.query(
+async function isInCooldown(decision, serverId) {
+  const result = await db.query(
     `SELECT id FROM alerts
      WHERE decision = $1
-       AND created_at > NOW() - INTERVAL '${COOLDOWN_MS} milliseconds'
+       AND server_id = $2
+       AND created_at > NOW() - make_interval(secs => $3::float / 1000)
      ORDER BY created_at DESC
      LIMIT 1`,
-    [decision]
+    [decision, serverId, env.ALERT_COOLDOWN_MS]
   );
   return result.rows.length > 0;
 }
 
-/**
- * Sauvegarde une alerte en base PostgreSQL.
- * @param {Object} prediction - Résultat complet du microservice FastAPI
- * @returns {Object} L'alerte créée en base
- */
-async function saveAlert(prediction) {
-  const result = await pool.query(
+async function saveAlert(prediction, features) {
+  const result = await db.query(
     `INSERT INTO alerts (
        decision, confidence,
        autoencoder_score, autoencoder_flag, autoencoder_threshold,
        isolation_forest_score, isolation_forest_flag,
        processing_time_ms, predicted_at,
-       status, created_at
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active', NOW())
+       server_id, avg_response_time, error_rate_5xx,
+       request_count, p95_response_time,
+       status, created_at, raw_payload
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'active', NOW(), $15)
      RETURNING *`,
     [
       prediction.decision,
@@ -69,33 +47,41 @@ async function saveAlert(prediction) {
       prediction.isolation_forest_flag,
       prediction.processing_time_ms,
       prediction.timestamp,
+      features.server_id ?? null,
+      features.avg_response_time ?? null,
+      features.error_rate_5xx ?? null,
+      features.request_count ?? null,
+      features.p95_response_time ?? null,
+      JSON.stringify(features),
     ]
   );
   return result.rows[0];
 }
 
 /**
- * Pipeline complet : appel FastAPI → décision → cooldown → sauvegarde.
- * @param {Object} features - Les 46 features
- * @returns {Object} { prediction, alert }
+ * Pipeline: call ML service → decide → cooldown (per server+decision) →
+ * persist → broadcast → invalidate list cache.
  */
 async function predict(features) {
-  // 1. Appel microservice ML
-  const prediction = await callFastAPI(features);
+  const prediction = await callMLService(features);
 
-  // 2. Si NORMAL → pas d'alerte
   if (prediction.decision === 'NORMAL') {
     return { prediction, alert: null };
   }
 
-  // 3. Vérifier le cooldown
-  const inCooldown = await isInCooldown(prediction.decision);
+  const inCooldown = await isInCooldown(prediction.decision, features.server_id);
   if (inCooldown) {
+    logger.info(
+      { decision: prediction.decision, serverId: features.server_id },
+      'Alert suppressed by cooldown'
+    );
     return { prediction, alert: null, cooldown: true };
   }
 
-  // 4. Sauvegarder l'alerte
-  const alert = await saveAlert(prediction);
+  const alert = await saveAlert(prediction, features);
+
+  emitNewAlert(alert);
+  await cache.invalidate(`${ALERTS_CACHE_PREFIX}*`);
 
   return { prediction, alert };
 }
