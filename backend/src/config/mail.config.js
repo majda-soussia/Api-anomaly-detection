@@ -20,6 +20,4 @@ const transporter = nodemailer.createTransport({
     pass: process.env.SMTP_PASS,  // mot de passe d'application Gmail (pas ton vrai mdp)
   },
 });
-console.log("SMTP_USER =", process.env.SMTP_USER);
-console.log("SMTP_PASS =", process.env.SMTP_PASS);
 module.exports = transporter;
