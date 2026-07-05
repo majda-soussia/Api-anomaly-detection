@@ -1,8 +1,8 @@
-// backend/src/websocket/socket.js
-const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
-const socketConfig = require('../config/socket.config');
-const { initMetricsEmitter } = require('./metrics.emitter');
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+const socketConfig = require("../config/socket.config");
+const { initMetricsEmitter, stopMetricsEmitter } = require("./metrics.emitter");
+const logger = require("../config/logger");
 
 let io = null;
 
@@ -10,34 +10,62 @@ function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: socketConfig.cors,
     transports: socketConfig.transports,
+
+    pingInterval: socketConfig.pingInterval,
+    pingTimeout: socketConfig.pingTimeout,
+    maxHttpBufferSize: 1e6,
+
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 2 * 60 * 1000,
+    },
   });
 
-  // Middleware Socket.IO : vérifie le JWT AVANT d'accepter la connexion
+  // Auth JWT
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
 
     if (!token) {
-      return next(new Error('Authentification requise.'));
+      return next(new Error("Authentification requise."));
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.user = decoded; // accessible plus tard via socket.user.role, etc.
+      socket.user = jwt.verify(token, process.env.JWT_SECRET);
       next();
-    } catch (err) {
-      return next(new Error('Token invalide ou expiré.'));
+    } catch {
+      next(new Error("Token invalide ou expiré."));
     }
   });
 
-  io.on('connection', (socket) => {
-    console.log(`[WebSocket] Client connecté: ${socket.id} (${socket.user.email}, role: ${socket.user.role})`);
+  io.on("connection", (socket) => {
+    logger.info(
+      {
+        socketId: socket.id,
+        user: socket.user.email,
+        role: socket.user.role,
+      },
+      "WebSocket client connected"
+    );
 
-    socket.on('subscribe:server', (serverId) => {
+    socket.on("subscribe:server", (serverId) => {
       socket.join(`server:${serverId}`);
     });
 
-    socket.on('disconnect', () => {
-      console.log(`[WebSocket] Client déconnecté: ${socket.id}`);
+    socket.on("unsubscribe:server", (serverId) => {
+      socket.leave(`server:${serverId}`);
+    });
+
+    socket.on("disconnect", (reason) => {
+      logger.info(
+        { socketId: socket.id, reason },
+        "WebSocket client disconnected"
+      );
+    });
+
+    socket.on("error", (err) => {
+      logger.warn(
+        { socketId: socket.id, err: err.message },
+        "WebSocket socket error"
+      );
     });
   });
 
@@ -47,8 +75,33 @@ function initSocket(httpServer) {
 }
 
 function getIO() {
-  if (!io) throw new Error('Socket.IO non initialisé.');
+  if (!io) {
+    throw new Error("Socket.IO not initialized.");
+  }
   return io;
 }
 
-module.exports = { initSocket, getIO };
+function emitNewAlert(alert) {
+  if (!io) return;
+
+  io.emit("alert:new", alert);
+
+  if (alert.server_id) {
+    io.to(`server:${alert.server_id}`).emit("alert:new", alert);
+  }
+}
+
+async function stopSocket() {
+  stopMetricsEmitter();
+
+  if (io) {
+    await new Promise((resolve) => io.close(resolve));
+  }
+}
+
+module.exports = {
+  initSocket,
+  getIO,
+  emitNewAlert,
+  stopSocket,
+};

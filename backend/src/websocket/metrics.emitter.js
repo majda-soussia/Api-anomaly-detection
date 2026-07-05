@@ -1,24 +1,24 @@
 const metricsService = require('../services/metrics.service');
+const logger = require('../config/logger');
+
+let intervalHandle = null;
 
 function initMetricsEmitter(io, intervalMs = 2000) {
-
-  setInterval(async () => {
-
+  intervalHandle = setInterval(async () => {
     try {
-
       const metrics = await metricsService.getLatestMetrics();
-
-
-      io.emit("metrics:update", metrics);
-
+      io.emit('metrics:update', metrics);
     } catch (err) {
-
-      console.error("[MetricsEmitter] Erreur :", err.message);
-
+      logger.error({ err: err.message }, '[MetricsEmitter] error');
     }
-
   }, intervalMs);
-
 }
 
-module.exports = { initMetricsEmitter };
+function stopMetricsEmitter() {
+  if (intervalHandle) {
+    clearInterval(intervalHandle);
+    intervalHandle = null;
+  }
+}
+
+module.exports = { initMetricsEmitter, stopMetricsEmitter };
