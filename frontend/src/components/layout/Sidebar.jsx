@@ -45,10 +45,10 @@ export default function Sidebar({ connected }) {
             color: '#fff',
           }}
         >
-          M
+          L
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>Mobile API</div>
+          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>LogPulse</div>
           <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.2 }}>Supervision</div>
         </div>
       </div>
