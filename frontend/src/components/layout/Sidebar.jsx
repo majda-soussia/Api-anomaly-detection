@@ -5,6 +5,10 @@ import NotificationImportantIcon from '@mui/icons-material/NotificationImportant
 import HistoryIcon from '@mui/icons-material/History';
 import { useActiveAlertsCount } from '../../hooks/useActiveAlertsCount';
 import { useTheme } from '../../hooks/useTheme';
+import logoDark from "../../assets/logo-dark.png";
+import logoLight from "../../assets/logo-light.png";
+import logoDark2 from "../../assets/logo-dark2.png";
+
 
 const NAV_ITEMS = [
   { to: '/overview', label: 'Overview', icon: <DashboardIcon /> },
@@ -31,26 +35,11 @@ export default function Sidebar({ connected }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 20px', borderBottom: '1px solid var(--border)' }}>
-        <div
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 7,
-            background: 'linear-gradient(135deg, var(--accent), #3b6fd9)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 13,
-            fontWeight: 700,
-            color: '#fff',
-          }}
-        >
-          L
-        </div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>LogPulse</div>
-          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.2 }}>Supervision</div>
-        </div>
+        <img
+          src={theme === "dark" ? logoLight : logoDark2}
+          alt="LogPulse"
+          width={200}
+/>
       </div>
 
       <nav style={{ flex: 1, padding: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 2 }}>
