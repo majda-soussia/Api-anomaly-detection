@@ -196,13 +196,7 @@ class HybridPredictor:
 
             self._loaded = True
             logger.info(
-                "Artéfacts chargés avec succès (%d features, threshold AE=%.6f).",
                 len(self.feature_names),
-                self.ae_threshold,
-            )
-        except ArtifactLoadError:
-            raise
-        except Exception as exc:  # noqa: BLE001
             raise ArtifactLoadError(f"Échec du chargement des artéfacts: {exc}") from exc
 
     @staticmethod

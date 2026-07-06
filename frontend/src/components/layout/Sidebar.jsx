@@ -4,17 +4,17 @@ import StorageIcon from '@mui/icons-material/Storage';
 import NotificationImportantIcon from '@mui/icons-material/NotificationImportant';
 import HistoryIcon from '@mui/icons-material/History';
 import { useActiveAlertsCount } from '../../hooks/useActiveAlertsCount';
-
+import { useTheme } from '../../hooks/useTheme';
 
 const NAV_ITEMS = [
   { to: '/overview', label: 'Overview', icon: <DashboardIcon /> },
   { to: '/servers', label: 'Servers', icon: <StorageIcon /> },
   { to: '/alerts', label: 'Alerts', icon: <NotificationImportantIcon /> , badge: true},
-  { to: '/history', label: 'History', icon: <HistoryIcon /> },
 ];
 
 export default function Sidebar({ connected }) {
   const activeAlerts = useActiveAlertsCount();
+  const { theme, toggle } = useTheme();
 
   return (
     <aside
@@ -45,10 +45,10 @@ export default function Sidebar({ connected }) {
             color: '#fff',
           }}
         >
-          M
+          L
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>Mobile API</div>
+          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>LogPulse</div>
           <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.2 }}>Supervision</div>
         </div>
       </div>
@@ -108,6 +108,30 @@ export default function Sidebar({ connected }) {
           <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Real-time monitoring</span>
         </div>
       </div>
+      <div style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
+            {theme === 'dark' ? 'Mode sombre' : 'Mode clair'}
+          </span>
+          <button
+            onClick={toggle}
+            title="Changer le thème"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-strong)',
+              background: 'var(--bg-surface-raised)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+        </div>
 
       <div style={{ padding: 'var(--space-4)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div

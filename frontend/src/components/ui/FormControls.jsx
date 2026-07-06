@@ -1,7 +1,4 @@
-/**
- * components/ui/FormControls.jsx
- */
-
+import SearchIcon from '@mui/icons-material/Search';
 const controlStyle = {
   padding: '7px 10px',
   fontSize: 13,
@@ -38,7 +35,9 @@ export function SearchInput({ value, onChange, placeholder = 'Rechercher…' }) 
           pointerEvents: 'none',
         }}
       >
-        ⌕
+        <SearchIcon
+          style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4, color: 'var(--text-tertiary)' }}
+        />
       </span>
       <input
         type="text"
