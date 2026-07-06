@@ -277,14 +277,6 @@ To improve reliability, communication with the ML service uses:
 - **axios-retry** for temporary network failures.
 - **opossum** as a circuit breaker to prevent backend failures when the ML service becomes unavailable.
 
-Several improvements were also made during development, including:
-
-- fixing cooldown logic to work per server,
-- replacing `||` with `??` when storing metric values,
-- improving configuration management,
-- adding request validation,
-- implementing rate limiting,
-- adding structured logging and graceful shutdown.
 
 ---
 
@@ -394,7 +386,6 @@ pip install -r requirements.txt
 
 ```bash
 cd flask_service
-pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8001
 ```
 
