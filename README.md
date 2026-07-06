@@ -24,18 +24,31 @@ The system has three moving parts: a Node.js API that owns the business logic an
 
 The codebase is split into four main parts:
 ```
-┌─────────────────┐        ┌──────────────────────┐        ┌───────────────────────┐
-│  React frontend  │  HTTP  │   Node.js backend    │  HTTP  │  FastAPI ML service     │
-│  (Vite, port     │◄──────►│  (Express, port 4000) │◄──────►│  (uvicorn, port 8001)   │
-│  5173)           │  WS    │                       │        │  Autoencoder + IF       │
-└─────────────────┘        │  - Postgres (alerts,  │        └───────────────────────┘
-                            │    users, metrics)    │
-                            │  - Redis (optional     │
-                            │    cache)              │
-                            │  - Socket.IO           │
-                            └──────────────────────┘
+                                  HTTP / REST
+┌─────────────────────┐   ◄────────────────────►   ┌──────────────────────────┐
+│   React Frontend    │                            │     Express Backend      │
+│─────────────────────│                            │──────────────────────────│
+│ • React 19          │                            │ • Express 5              │
+│ • Vite              │                            │ • Port 4000              │
+│ • Port 5173         │◄─────── Socket.IO ───────► │ • Socket.IO              │
+└─────────────────────┘                            │ • PostgreSQL             │
+                                                   │ • Redis (optional)       │
+                                                   └─────────────┬────────────┘
+                                                                 │
+                                                                 │ HTTP / REST
+                                                                 ▼
+                                                   ┌──────────────────────────┐
+                                                   │    FastAPI ML Service    │
+                                                   │──────────────────────────│
+                                                   │ • Uvicorn (Port 8001)    │
+                                                   │ • Autoencoder            │
+                                                   │ • Isolation Forest       │
+                                                   │ • /predict               │
+                                                   │ • /health                │
+                                                   │ • /metadata              │
+                                                   └──────────────────────────┘
 ```
- **Frontend** : React 19 + Vite, talks to the backend over REST for alert history and over Socket.IO for live metrics.
+ - **Frontend** : React 19 + Vite, talks to the backend over REST for alert history and over Socket.IO for live metrics.
 - **Backend** : Express 5 API. Owns auth, alerts, metrics history, and the health check. Talks to Postgres directly and proxies prediction requests to the ML service through a circuit breaker (`opossum`) with retries (`axios-retry`), so a slow or dead ML service degrades gracefully instead of blocking requests.
 - **ML service** : FastAPI app that loads the trained Autoencoder (Keras), the Isolation Forest, the scaler, and the imputer once at startup and exposes `/predict`, `/health`, and `/metadata`. It has no knowledge of Postgres, Redis, or alerts — it only scores feature vectors.
 
