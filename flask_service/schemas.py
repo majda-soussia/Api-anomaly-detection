@@ -1,26 +1,9 @@
-"""
-schemas.py
-----------
-Modèles Pydantic pour le microservice de détection d'anomalies hybride.
-
-PredictRequest est construit DYNAMIQUEMENT à partir de la liste des 46
-features définie dans le fichier metadata JSON, pour garantir que les
-noms de champs de l'API restent toujours synchronisés avec le modèle.
-
-Le chemin du fichier metadata est résolu de la même façon que dans
-predictor.py (mêmes variables d'environnement ARTIFACTS_BASE_DIR,
-ML_ARTIFACTS_DIR, ARTIFACT_METADATA_FILENAME), pour éviter toute
-divergence entre les deux fichiers.
-"""
-
 import json
 import os
 from typing import Optional
 
 from pydantic import BaseModel, Field, create_model, ConfigDict
 
-# Racine du projet par défaut : un niveau au-dessus de ce fichier
-# (ex: API_LOGS/flask_service/schemas.py -> API_LOGS/).
 _DEFAULT_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _BASE_DIR = os.getenv("ARTIFACTS_BASE_DIR", _DEFAULT_BASE_DIR)

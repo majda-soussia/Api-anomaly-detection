@@ -1,5 +1,4 @@
 https://huggingface.co/datasets/mindweave/web-server-logs
-pip install pandas
 pip install huggingface_hub
 pip install pandas numpy  matplotlib seaborn
 pip install pyarrow

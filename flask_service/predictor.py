@@ -159,32 +159,13 @@ class HybridPredictor:
                 self.isolation_forest_filename,
                 required_method="score_samples",
             )
-            # Scaler et clip_bounds extraits directement du .pkl IF (CORRECT)
-            _if_raw = self._load_pickle(
-                os.path.join(self.data_dir, self.isolation_forest_filename),
-                self.isolation_forest_filename,
+            self.scaler = self._unwrap_model(
+                self._load_pickle(
+                    os.path.join(self.data_dir, self.scaler_filename), self.scaler_filename
+                ),
+                self.scaler_filename,
+                required_method="transform",
             )
-            if isinstance(_if_raw, dict):
-                self.isolation_forest = self._unwrap_model(
-                    _if_raw, self.isolation_forest_filename, "score_samples"
-                )
-                self.scaler = _if_raw.get("scaler")
-                self.clip_bounds = _if_raw.get("clip_bounds")
-                logger.info("Scaler et clip_bounds extraits du .pkl IF.")
-            else:
-                self.isolation_forest = _if_raw
-                self.scaler = self._unwrap_model(
-                    self._load_pickle(
-                        os.path.join(self.data_dir, self.scaler_filename), self.scaler_filename
-                    ),
-                    self.scaler_filename,
-                    required_method="transform",
-                )
-                self.clip_bounds = self._load_pickle(
-                    os.path.join(self.data_dir, self.clip_bounds_filename), self.clip_bounds_filename
-                )
-
-            # ← TOUJOURS chargé, que ce soit dict ou pas
             self.imputer = self._unwrap_model(
                 self._load_pickle(
                     os.path.join(self.data_dir, self.imputer_filename), self.imputer_filename
@@ -192,11 +173,19 @@ class HybridPredictor:
                 self.imputer_filename,
                 required_method="transform",
             )
-                    
+            self.clip_bounds = self._load_pickle(
+                os.path.join(self.data_dir, self.clip_bounds_filename), self.clip_bounds_filename
+            )
 
             self._loaded = True
             logger.info(
+                "Artéfacts chargés avec succès (%d features, threshold AE=%.6f).",
                 len(self.feature_names),
+                self.ae_threshold,
+            )
+        except ArtifactLoadError:
+            raise
+        except Exception as exc:  # noqa: BLE001
             raise ArtifactLoadError(f"Échec du chargement des artéfacts: {exc}") from exc
 
     @staticmethod

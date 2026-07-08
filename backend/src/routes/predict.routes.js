@@ -11,5 +11,5 @@ const { predictBodySchema } = require('../validators/predict.validator');
 const { predictLimiter } = require('../middleware/security');
 
 router.post('/', predictLimiter, validate(predictBodySchema, 'body'), predict);
-
+router.post('/predict', predictLimiter, validate(predictBodySchema, 'body'), predict);
 module.exports = router;

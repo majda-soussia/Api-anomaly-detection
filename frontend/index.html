@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
   </head>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script defer>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "6888ab91-fbcd-4b22-9097-9b3d347d7bbf",
+      allowLocalhostAsSecureOrigin: window.location.hostname === "localhost",
+    });
+  });
+</script>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

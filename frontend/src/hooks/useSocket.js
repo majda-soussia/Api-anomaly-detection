@@ -1,22 +1,32 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
+import { useAuth } from '../context/AuthContext';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 let socket = null;
-function getSocket() {
+function getSocket(token) {
   if (!socket) {
-    socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+    socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      auth: { token },
+      autoConnect: false, // we control connect() manually below, once we have a token
+    });
+  } else if (token) {
+    socket.auth = { token }; // keep it fresh if the token changes (e.g. re-login)
   }
   return socket;
 }
 
 export function useMetricsSocket() {
+  const { accessToken } = useAuth();
   const [metrics, setMetrics] = useState(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const s = getSocket();
+    if (!accessToken) return; // don't even try to connect before login
+
+    const s = getSocket(accessToken);
 
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
@@ -25,14 +35,19 @@ export function useMetricsSocket() {
     s.on('connect', onConnect);
     s.on('disconnect', onDisconnect);
     s.on('metrics:update', onMetrics);
-    if (s.connected) setConnected(true);
+
+    if (!s.connected) {
+      s.connect();
+    } else {
+      setConnected(true);
+    }
 
     return () => {
       s.off('connect', onConnect);
       s.off('disconnect', onDisconnect);
       s.off('metrics:update', onMetrics);
     };
-  }, []);
+  }, [accessToken]);
 
   return { metrics, connected };
 }

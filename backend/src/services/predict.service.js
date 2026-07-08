@@ -1,9 +1,9 @@
 const db = require('../config/db');
 const mlServiceClient = require('../utils/mlServiceClient');
 const cache = require('../config/redis');
-const { emitNewAlert } = require('../websocket/socket');
 const env = require('../config/env');
 const logger = require('../config/logger');
+const { sendAlertPush } = require('./onesignal.service');
 
 const ALERTS_CACHE_PREFIX = 'alerts:list:';
 
@@ -80,7 +80,9 @@ async function predict(features) {
 
   const alert = await saveAlert(prediction, features);
 
+  const { emitNewAlert } = require('../websocket/socket'); // lazy require — breaks the cycle
   emitNewAlert(alert);
+  sendAlertPush(alert); // fire-and-forget push notification — don't await, don't let it block the pipeline
   await cache.invalidate(`${ALERTS_CACHE_PREFIX}*`);
 
   return { prediction, alert };

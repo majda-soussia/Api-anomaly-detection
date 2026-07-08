@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/apiClient';
 import { useAlertEvents } from '../hooks/useSocket';
@@ -24,6 +23,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ReplayIcon from '@mui/icons-material/Replay';
 import SearchIcon from '@mui/icons-material/Search';
+import { useOneSignal } from '../hooks/useOneSignal';
 const LIMIT = 10;
 const POLL_MS = 30000;
 
@@ -35,7 +35,6 @@ function trendOf(today, yesterday) {
   if (!yesterday) return null;
   return ((today - yesterday) / yesterday) * 100;
 }
-
 function hourlyBuckets(alerts, hours = 24, predicate = () => true) {
   const now = Date.now();
   const bucketMs = (hours * 3600000) / 6; // 6 points across the window
@@ -49,6 +48,20 @@ function hourlyBuckets(alerts, hours = 24, predicate = () => true) {
 }
 export default function Alerts() {
   const toast = useToast();
+  const { subscribeToAlerts, isSubscribed, permission } = useOneSignal();
+  const [subscribing, setSubscribing] = useState(false);
+
+  const handleSubscribeClick = async () => {
+    setSubscribing(true);
+    try {
+      await subscribeToAlerts();
+      toast.success('Notifications activées ');
+    } catch (err) {
+      toast.error(err.message || "Impossible d'activer les notifications.");
+    } finally {
+      setSubscribing(false);
+    }
+  };
 
   const [alerts, setAlerts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -199,7 +212,14 @@ export default function Alerts() {
   const secondsAgo = lastUpdated ? Math.max(0, Math.round((Date.now() - lastUpdated) / 1000)) : null;
   return (
     <div>
-      <PageHeader secondsAgo={secondsAgo} connected={status !== 'error'} onRefresh={fetchAlerts} />
+      <PageHeader
+        secondsAgo={secondsAgo}
+        connected={status !== 'error'}
+        onRefresh={fetchAlerts}
+        isSubscribed={isSubscribed}
+        subscribing={subscribing}
+        onSubscribe={handleSubscribeClick}
+      />
       <MethodLegend />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
@@ -348,9 +368,9 @@ export default function Alerts() {
     </div>
   );
 }
-function PageHeader({ secondsAgo, connected, onRefresh }) {
+function PageHeader({ secondsAgo, connected, onRefresh, isSubscribed, subscribing, onSubscribe }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-5)' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-5)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
       <div>
         <h2 style={{ fontSize: 20, marginBottom: 4 }}>Alertes</h2>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Décisions du pipeline hybride Autoencoder + Isolation Forest, en temps réel.</p>
@@ -362,6 +382,51 @@ function PageHeader({ secondsAgo, connected, onRefresh }) {
         <button onClick={onRefresh} title="Rafraîchir" style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 14 }}>
           <RefreshIcon style={{ fontSize: 16 }} />
         </button>
+
+        {isSubscribed ? (
+          <span
+            title="Vous recevrez les alertes push sur cet appareil"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '5px 10px',
+              borderRadius: 999,
+              color: 'var(--success)',
+              background: 'var(--success-soft)',
+              border: '1px solid var(--success-border)',
+            }}
+          >
+            <NotificationsIcon style={{ fontSize: 13 }} />
+            Alertes activées
+          </span>
+        ) : (
+          <button
+            onClick={onSubscribe}
+            disabled={subscribing}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '6px 12px',
+              borderRadius: 999,
+              color: 'var(--accent)',
+              background: 'var(--accent-soft, rgba(99,102,241,0.1))',
+              border: '1px solid var(--accent)',
+              cursor: subscribing ? 'wait' : 'pointer',
+              opacity: subscribing ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <NotificationsIcon style={{ fontSize: 14 }} />
+            {subscribing ? 'Activation…' : 'Activer les alertes'}
+          </button>
+        )}
+
         <span
           style={{
             display: 'flex',
@@ -385,7 +450,7 @@ function PageHeader({ secondsAgo, connected, onRefresh }) {
 }
 
 function MethodLegend() {
- return 
+  return null;
 }
 
 function Th({ children }) {

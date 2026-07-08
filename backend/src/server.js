@@ -7,10 +7,11 @@ const logger = require('./config/logger');
 const db = require('./config/db');
 const cache = require('./config/redis');
 const { initSocket, stopSocket } = require('./websocket/socket');
-
+const { initMetricsEmitter, stopMetricsEmitter } = require('./websocket/metrics.emitter');
 const httpServer = http.createServer(app);
 
-initSocket(httpServer);  // only once
+const io = initSocket(httpServer);  
+initMetricsEmitter(io);             
 cache.init();
 
 httpServer.listen(env.PORT, () => {

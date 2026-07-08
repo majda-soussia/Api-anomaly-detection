@@ -9,7 +9,7 @@ import { SkeletonRow } from '../components/ui/Skeleton';
 import { EmptyState, ErrorState } from '../components/ui/StateViews';
 import Modal from '../components/ui/Modal';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-
+import { useAlertEvents } from '../hooks/useSocket';
 const PERIODS = [
   { label: '24h', hours: 24 },
   { label: '7j',  hours: 168 },
@@ -77,7 +77,15 @@ export default function History() {
       setErrorMsg(err instanceof ApiError ? err.message : "Impossible de charger l'historique.");
     }
   }, [range, decision]);
-
+  useAlertEvents(
+  useCallback(
+    (alert) => {
+      if (decision && alert.decision !== decision) return; // respect the active filter
+      setAlerts((prev) => [alert, ...prev]);
+    },
+    [decision]
+  )
+);
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const chartData     = useMemo(() => groupByBucket(alerts, period.hours), [alerts, period]);

@@ -1,5 +1,6 @@
-etl1.ipynb
 __pycache__/
+.env
+backend/.env
 env/
 venv/
 data/
