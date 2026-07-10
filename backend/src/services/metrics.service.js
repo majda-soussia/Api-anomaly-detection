@@ -5,16 +5,7 @@ async function loadDataIfNeeded() {
   if (rowsByServer) return;
 
   const { rows } = await pool.query(`
-    SELECT
-      server_id,
-      timestamp,
-      request_count,
-      unique_ips,
-      avg_response_time,
-      error_rate_5xx,
-      anomaly_score,
-      is_anomaly,
-      status
+    SELECT *
     FROM test_predictions
     ORDER BY server_id ASC, timestamp ASC;
   `);

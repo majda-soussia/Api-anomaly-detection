@@ -31,11 +31,11 @@ import pickle
 import time
 from datetime import datetime, timezone
 from typing import Any
-
+import pandas as pd
 import numpy as np
 
 logger = logging.getLogger("hybrid_predictor")
-
+from alerting import envoyer_alerte
 
 class MissingFeatureError(Exception):
     """Levée quand une ou plusieurs features attendues sont absentes de la requête."""
@@ -274,7 +274,7 @@ class HybridPredictor:
             raise MissingFeatureError(missing)
 
         ordered_values = [payload[f] for f in self.feature_names]
-        return np.array(ordered_values, dtype=np.float64).reshape(1, -1)
+        return pd.DataFrame([ordered_values], columns=self.feature_names)
 
     @staticmethod
     def _extract_lower_upper(bounds: Any) -> tuple[float, float]:
@@ -342,17 +342,14 @@ class HybridPredictor:
                 X_imputed[:, idx] = np.clip(X_imputed[:, idx], lower, upper)
 
         # 3. Normalisation
+        if hasattr(self.scaler, "feature_names_in_"):
+            scaler_order = list(self.scaler.feature_names_in_)
+            if scaler_order != self.feature_names:
+                logger.error(
+                    "MISMATCH ORDRE FEATURES !\nmetadata: %s\nscaler:   %s",
+                    self.feature_names, scaler_order,
+                )
         X_scaled = self.scaler.transform(X_imputed)
-
-        # DEBUG TEMPORAIRE — à retirer après vérification
-        logger.info(
-            "DEBUG preprocess: X_raw[0][:3]=%s | X_scaled[0][:3]=%s | mean=%.4f std=%.4f",
-            X_imputed[0][:3].tolist(),
-            X_scaled[0][:3].tolist(),
-            float(np.mean(np.abs(X_scaled))),
-            float(np.std(X_scaled)),
-        )
-
         return X_scaled
 
     # ------------------------------------------------------------------ #
@@ -477,5 +474,6 @@ class HybridPredictor:
             "Prédiction: ae_score=%.6f ae_flag=%s if_score=%.6f if_flag=%s decision=%s time=%.2fms",
             ae_score, ae_flag, if_score, if_flag, decision, elapsed_ms,
         )
+        envoyer_alerte(decision, ae_score, if_score, confidence)
 
         return result

@@ -13,7 +13,7 @@ async function sendAlertPush(alert) {
       },
       body: JSON.stringify({
         app_id: process.env.ONESIGNAL_APP_ID,
-        included_segments: ['Subscribed Users'],
+        included_segments: ['Total Subscriptions'],
         headings: { en: ` ${alert.decision}` },
         contents: {
           en: `Server ${alert.server_id} — confidence ${Math.round(alert.confidence * 100)}%`,
@@ -26,7 +26,7 @@ async function sendAlertPush(alert) {
     if (!response.ok) {
       logger.error({ data }, ' OneSignal push failed');
     } else {
-      logger.info({ id: data.id, recipients: data.recipients }, ' OneSignal push sent');
+      logger.info({ full: data }, ' OneSignal push sent — full response');
     }
 
     return data;

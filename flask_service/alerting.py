@@ -66,6 +66,6 @@ def envoyer_alerte(decision: str, ae_score: float, if_score: float, confidence: 
     try:
         r = requests.post(ONESIGNAL_URL, json=payload, headers=headers, timeout=5)
         r.raise_for_status()
-        logger.info("Alerte OneSignal envoyée (%s) : %s", decision, r.json().get("id"))
+        logger.info("Alerte OneSignal envoyée (%s) : réponse complète = %s", decision, r.json())
     except requests.RequestException as exc:
         logger.error("Échec de l'envoi OneSignal : %s", exc)

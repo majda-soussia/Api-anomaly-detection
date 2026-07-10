@@ -13,23 +13,18 @@ function initMetricsEmitter(io, intervalMs = 2000) {
       // Run each server's current tick through the real anomaly pipeline.
       // predict() itself handles cooldown, so this won't spam alerts every 2s.
       await Promise.all(
-        metrics.map((row) =>
-          predictService
-            .predict({
-              server_id: row.server_id,
-              avg_response_time: row.avg_response_time,
-              error_rate_5xx: row.error_rate_5xx,
-              request_count: row.request_count,
-              p95_response_time: row.p95_response_time,
-            })
-            .catch((err) => {
-              logger.error(
-                { err: err.message, serverId: row.server_id },
-                '[MetricsEmitter] predict() failed'
-              );
-            })
-        )
-      );
+      metrics.map((row) => {
+        const { timestamp, anomaly_score, is_anomaly, status, y_true_eval_only, ...mlFeatures } = row;
+        return predictService
+          .predict(mlFeatures) // contient server_id + les 46 features ML
+          .catch((err) => {
+            logger.error(
+              { err: err.message, serverId: row.server_id },
+              '[MetricsEmitter] predict() failed'
+            );
+          });
+      })
+    );
     } catch (err) {
       logger.error({ err: err.message }, '[MetricsEmitter] error');
     }

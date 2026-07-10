@@ -12,7 +12,8 @@ Endpoints:
 Le service tourne sur le port 8001 (le backend Node.js tourne sur 3000 et
 appelle ce service en HTTP, CORS est donc activé).
 """
-
+from dotenv import load_dotenv
+load_dotenv()
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -99,6 +100,22 @@ async def missing_feature_handler(request: Request, exc: MissingFeatureError):
             "detail": "Features manquantes dans la requête.",
             "missing_features": exc.missing_features,
         },
+    )
+
+
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    """Log le détail complet des erreurs de validation Pydantic (schéma PredictRequest)."""
+    body = await request.body()
+    logger.error(
+        "Validation Pydantic échouée sur %s\nErreurs: %s\nBody reçu: %s",
+        request.url.path, exc.errors(), body.decode("utf-8", errors="replace"),
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
     )
 
 
