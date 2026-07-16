@@ -5,6 +5,15 @@ async function sendAlertPush(alert) {
   try {
     logger.info({ alertId: alert.id, decision: alert.decision }, ' Sending OneSignal push...');
 
+
+    const explanation = alert.explanation ?? {};
+    const rootCause = explanation.root_cause;
+    const reasons = explanation.reason ?? [];
+
+    const bodyText = rootCause
+      ? `${rootCause.method} ${rootCause.endpoint} — ${reasons[0] ?? 'cause identifiée'} (${rootCause.confidence}% confiance)`
+      : `Server ${alert.server_id} — confidence ${Math.round(alert.confidence * 100)}% (cause non identifiée)`;
+
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
@@ -14,10 +23,8 @@ async function sendAlertPush(alert) {
       body: JSON.stringify({
         app_id: process.env.ONESIGNAL_APP_ID,
         included_segments: ['Total Subscriptions'],
-        headings: { en: ` ${alert.decision}` },
-        contents: {
-          en: `Server ${alert.server_id} — confidence ${Math.round(alert.confidence * 100)}%`,
-        },
+        headings: { en: `${alert.decision} — Serveur ${alert.server_id}` },
+        contents: { en: bodyText },
       }),
     });
 

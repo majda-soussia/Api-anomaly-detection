@@ -6,7 +6,6 @@ import { useToast } from '../components/ui/Toast';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import KpiCard from '../components/ui/KpiCard';
-import SignalBadge from '../components/ui/SignalBadge';
 import Pagination from '../components/ui/Pagination';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Modal from '../components/ui/Modal';
@@ -310,14 +309,14 @@ export default function Alerts() {
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface-raised)' }}>
               <Th>ID</Th>
-              <Th>Niveau</Th>
+              <Th hint="CRITICAL = anomalie confirmée par les deux modèles de détection. WARNING = anomalie détectée par un seul des deux, à surveiller.">Niveau</Th>
               <Th>Serveur</Th>
-              <Th>P95</Th>
-              <Th>Moy.</Th>
-              <Th>Erreurs 5xx</Th>
-              <Th>Requêtes</Th>
-              <Th>Signal (AE / IF)</Th>
-              <Th>Confiance</Th>
+              <Th hint="L'endpoint identifié comme étant à l'origine de cette alerte, avec la raison détectée automatiquement.">Cause probable</Th>
+              <Th hint="Temps de réponse : 95% des requêtes de cette fenêtre ont répondu en moins de cette durée. En rouge si anormalement élevé.">P95 (ms)</Th>
+              <Th hint="Temps de réponse moyen sur la fenêtre de l'alerte, en millisecondes.">Moy. (ms)</Th>
+              <Th hint="Pourcentage de requêtes ayant renvoyé une erreur serveur (code HTTP 500+).">Erreurs 5XX</Th>
+              <Th hint="Nombre de requêtes reçues pendant la fenêtre de l'alerte.">Requêtes</Th>
+              <Th hint="Niveau de certitude du système dans son diagnostic (cause + niveau de gravité).">Confiance</Th>
               <Th>Date</Th>
               <Th>Action</Th>
             </tr>
@@ -453,14 +452,35 @@ function MethodLegend() {
   return null;
 }
 
-function Th({ children }) {
-  return <th style={{ padding: '10px 12px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>{children}</th>;
+function Th({ children, hint }) {
+  return (
+    <th style={{ padding: '10px 12px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {children}
+        {hint && (
+          <span
+            title={hint}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 13, height: 13, borderRadius: '50%', border: '1px solid var(--text-tertiary)',
+              fontSize: 9, fontWeight: 700, cursor: 'help', textTransform: 'none', letterSpacing: 0,
+            }}
+          >
+            ?
+          </span>
+        )}
+      </span>
+    </th>
+  );
 }
-
 function AlertRow({ alert, acking, onAcknowledge, onView, onCopyId }) {
   const errRate = num(alert.error_rate_5xx);
   const p95 = num(alert.p95_response_time);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const explanation = alert.explanation ?? {};
+  const rootCause = explanation.root_cause;
+  const reasons = explanation.reason ?? [];
 
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -469,16 +489,40 @@ function AlertRow({ alert, acking, onAcknowledge, onView, onCopyId }) {
         <Badge tone={alert.decision === 'CRITICAL' ? 'critical' : 'warning'} dot>{alert.decision}</Badge>
       </Td>
       <Td strong>{alert.server_id || '—'}</Td>
+      <Td>
+        {rootCause ? (
+          <div
+            title={reasons.join(' • ')}
+            style={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 220, cursor: 'help' }}
+          >
+            <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>
+              {rootCause.method} {rootCause.endpoint}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-tertiary)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {reasons[0] ?? ''}
+            </span>
+          </div>
+        ) : (
+          <span
+              title="Aucune requête ou pic de trafic anormal n'a été trouvé dans les logs pour cette fenêtre — l'alerte vient uniquement du modèle de prédiction, pas d'un signal endpoint identifiable."
+              style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic', cursor: 'help' }}
+            >
+              Non identifiée
+            </span>
+        )}
+      </Td>
       <Td className="mono" style={{ color: p95 !== null && p95 > 1000 ? 'var(--critical)' : undefined }}>{fmtMs(alert.p95_response_time)}</Td>
       <Td className="mono">{fmtMs(alert.avg_response_time)}</Td>
       <Td className="mono" style={{ color: errRate !== null && errRate > 0.05 ? 'var(--critical)' : undefined }}>{fmtPct(alert.error_rate_5xx)}</Td>
       <Td className="mono">{num(alert.request_count) ?? '—'}</Td>
-      <Td>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <SignalBadge label="AE" flagged={alert.autoencoder_flag} score={num(alert.autoencoder_score)} />
-          <SignalBadge label="IF" flagged={alert.isolation_forest_flag} score={num(alert.isolation_forest_score)} />
-        </div>
-      </Td>
       <Td>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="mono" style={{ fontSize: 12, minWidth: 32 }}>{num(alert.confidence) !== null ? `${(num(alert.confidence) * 100).toFixed(0)}%` : '—'}</span>
@@ -560,15 +604,80 @@ function Td({ children, className = '', strong, muted, style }) {
 }
 
 function AlertDetailModal({ alert, onClose }) {
+  const explanation = alert?.explanation ?? {};
+  const rootCause = explanation.root_cause;
+  const reasons = explanation.reason ?? [];
+  const topFeatures = explanation.top_contributing_features ?? [];
+
   return (
     <Modal open={!!alert} onClose={onClose} title={alert ? `Alerte #${alert.id} — ${alert.server_id}` : ''}>
       {alert && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            <Badge tone={alert.decision === 'CRITICAL' ? 'critical' : 'warning'} dot>{alert.decision}</Badge>
-            <SignalBadge label="AE" flagged={alert.autoencoder_flag} score={num(alert.autoencoder_score)} />
-            <SignalBadge label="IF" flagged={alert.isolation_forest_flag} score={num(alert.isolation_forest_score)} />
-          </div>
+          <Badge tone={alert.decision === 'CRITICAL' ? 'critical' : 'warning'} dot>{alert.decision}</Badge>
+        </div>
+
+          {(rootCause || reasons.length > 0) && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                Cause probable
+              </div>
+              <div
+                style={{
+                  background: 'var(--critical-soft, rgba(239,68,68,0.08))',
+                  border: '1px solid var(--critical-border, rgba(239,68,68,0.3))',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: 'var(--space-3)',
+                }}
+              >
+                {rootCause && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span className="mono" style={{ fontWeight: 700, fontSize: 13 }}>
+                      {rootCause.method} {rootCause.endpoint}
+                    </span>
+                    <Badge tone="critical">{rootCause.confidence}% confiance</Badge>
+                  </div>
+                )}
+                {reasons.length > 0 && (
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+
+          {topFeatures.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                Métriques les plus contributrices
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {topFeatures.map((f) => (
+                  <div
+                    key={f.feature}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: 12,
+                      padding: '6px 10px',
+                      background: 'var(--bg-canvas)',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    <span className="mono">{f.feature}</span>
+                    <span style={{ color: f.direction === 'high' ? 'var(--critical)' : 'var(--warning)', fontWeight: 600 }}>
+                      {f.direction === 'high' ? '↑' : '↓'} z={f.z_score}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Vecteur de features (raw_payload)</div>
             <pre

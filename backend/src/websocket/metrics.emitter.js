@@ -14,15 +14,15 @@ function initMetricsEmitter(io, intervalMs = 2000) {
       // predict() itself handles cooldown, so this won't spam alerts every 2s.
       await Promise.all(
       metrics.map((row) => {
-        const { timestamp, anomaly_score, is_anomaly, status, y_true_eval_only, ...mlFeatures } = row;
-        return predictService
-          .predict(mlFeatures) // contient server_id + les 46 features ML
-          .catch((err) => {
-            logger.error(
-              { err: err.message, serverId: row.server_id },
-              '[MetricsEmitter] predict() failed'
-            );
-          });
+        const { anomaly_score, is_anomaly, status, y_true_eval_only, ...featuresWithTimestamp } = row;
+    return predictService
+      .predict(featuresWithTimestamp)
+      .catch((err) => {
+        logger.error(
+          { err: err.message, serverId: row.server_id },
+          '[MetricsEmitter] predict() failed'
+        );
+      });
       })
     );
     } catch (err) {

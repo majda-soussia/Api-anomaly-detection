@@ -54,19 +54,19 @@ class TestConfidenceScore:
     """Vérifie que le score de confiance reste toujours borné dans [0, 1]."""
 
     def test_confidence_critical_in_bounds(self):
-        conf = HybridPredictor._confidence(
+        conf = HybridPredictor._confidence_heuristic(
             ae_score=0.9, ae_threshold=0.446282, ae_flag=True, if_flag=True
         )
         assert 0.0 <= conf <= 1.0
 
     def test_confidence_warning_in_bounds(self):
-        conf = HybridPredictor._confidence(
+        conf = HybridPredictor._confidence_heuristic(   # ← était _confidence
             ae_score=0.5, ae_threshold=0.446282, ae_flag=True, if_flag=False
         )
         assert 0.0 <= conf <= 1.0
 
     def test_confidence_normal_in_bounds(self):
-        conf = HybridPredictor._confidence(
+        conf = HybridPredictor._confidence_heuristic(   # ← était _confidence
             ae_score=0.1, ae_threshold=0.446282, ae_flag=False, if_flag=False
         )
         assert 0.0 <= conf <= 1.0
@@ -97,7 +97,7 @@ class TestMissingFeatureValidation:
         payload = {"feat_c": 3.0, "feat_a": 1.0, "feat_b": 2.0}
         result = predictor._validate_and_order_features(payload)
 
-        assert result.tolist() == [[1.0, 2.0, 3.0]]
+        assert result.values.tolist() == [[1.0, 2.0, 3.0]]   # .values.tolist() au lieu de .tolist()
 
 
 class TestClipBoundsFormatDetection:

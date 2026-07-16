@@ -45,6 +45,13 @@ PredictRequest.__doc__ = (
 )
 
 
+class FeatureContribution(BaseModel):
+    feature: str = Field(..., description="Nom de la feature")
+    z_score: float = Field(..., description="Valeur normalisée : >0 = anormalement haut, <0 = anormalement bas")
+    reconstruction_error: float = Field(..., description="Erreur de reconstruction de l'Autoencoder pour cette feature")
+    direction: str = Field(..., description="'high' ou 'low'")
+
+
 class PredictResponse(BaseModel):
     """Réponse renvoyée par POST /predict."""
 
@@ -57,11 +64,12 @@ class PredictResponse(BaseModel):
 
     decision: str = Field(..., description="'CRITICAL', 'WARNING' ou 'NORMAL'")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Score de confiance de la décision, dans [0,1]")
+    top_contributing_features: list[FeatureContribution] = Field(
+        default_factory=list, description="Top features responsables de l'anomalie (vide si NORMAL)"
+    )
 
     processing_time_ms: float = Field(..., description="Temps de traitement total en millisecondes")
     timestamp: str = Field(..., description="Horodatage ISO 8601 UTC de la prédiction")
-
-
 class HealthResponse(BaseModel):
     status: str
     autoencoder_loaded: bool

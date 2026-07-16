@@ -4,6 +4,7 @@ const cache = require('../config/redis');
 const env = require('../config/env');
 const logger = require('../config/logger');
 const { sendAlertPush } = require('./onesignal.service');
+const { analyzeEndpoints } = require('./endpointAnalyzer.service');
 
 const ALERTS_CACHE_PREFIX = 'alerts:list:';
 
@@ -25,7 +26,7 @@ async function isInCooldown(decision, serverId) {
   return result.rows.length > 0;
 }
 
-async function saveAlert(prediction, features) {
+async function saveAlert(prediction, features, explanation) {
   const result = await db.query(
     `INSERT INTO alerts (
        decision, confidence,
@@ -34,8 +35,8 @@ async function saveAlert(prediction, features) {
        processing_time_ms, predicted_at,
        server_id, avg_response_time, error_rate_5xx,
        request_count, p95_response_time,
-       status, created_at, raw_payload
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'active', NOW(), $15)
+       status, created_at, raw_payload, explanation
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'active', NOW(), $15, $16)
      RETURNING *`,
     [
       prediction.decision,
@@ -53,11 +54,11 @@ async function saveAlert(prediction, features) {
       features.request_count ?? null,
       features.p95_response_time ?? null,
       JSON.stringify(features),
+      JSON.stringify(explanation),
     ]
   );
   return result.rows[0];
 }
-
 /**
  * Pipeline: call ML service → decide → cooldown (per server+decision) →
  * persist → broadcast → invalidate list cache.
@@ -78,7 +79,35 @@ async function predict(features) {
     return { prediction, alert: null, cooldown: true };
   }
 
-  const alert = await saveAlert(prediction, features);
+  // Fenêtre d'analyse : ancrée sur le dernier timestamp RÉELLEMENT disponible
+  // dans access_logs pour ce serveur (pas l'heure système), car le dataset
+  // est un rejeu de données historiques, pas du temps réel.
+  let endpointAnalysis = { root_cause: null, reason: [], endpoints_analyzed: [] };
+  try {
+    if (features.timestamp) {
+  const MARGIN_MS = 10 * 60 * 1000; // marge de 10 min autour du moment exact de la requête
+  const center = new Date(features.timestamp);
+  const windowStart = new Date(center.getTime() - MARGIN_MS);
+  const windowEnd = new Date(center.getTime() + MARGIN_MS);
+  endpointAnalysis = await analyzeEndpoints(features.server_id, windowStart, windowEnd);
+      logger.info(
+        { serverId: features.server_id, windowStart, windowEnd, endpoints: endpointAnalysis.endpoints_analyzed },
+        'Endpoint analysis result (debug)'
+      );
+    } else {
+      logger.warn({ serverId: features.server_id }, 'features.timestamp manquant : impossible d’aligner la fenêtre endpoint');
+    }
+  } catch (err) {
+    logger.error({ err: err.message, serverId: features.server_id }, 'Endpoint analysis failed');
+  }
+
+  const explanation = {
+    top_contributing_features: prediction.top_contributing_features ?? [],
+    root_cause: endpointAnalysis.root_cause,
+    reason: endpointAnalysis.reason,
+  };
+
+  const alert = await saveAlert(prediction, features, explanation);
 
   const { emitNewAlert } = require('../websocket/socket'); // lazy require — breaks the cycle
   emitNewAlert(alert);

@@ -29,6 +29,8 @@ import logging
 import os
 import pickle
 import time
+
+import joblib
 from datetime import datetime, timezone
 from typing import Any
 import pandas as pd
@@ -67,6 +69,7 @@ class HybridPredictor:
         scaler_filename: str | None = None,
         imputer_filename: str | None = None,
         clip_bounds_filename: str | None = None,
+        confidence_calibrator_filename: str | None = None,
     ):
         self.base_dir = base_dir or os.path.dirname(os.path.abspath(__file__))
         self.ml_dir = os.path.join(self.base_dir, ml_dir)
@@ -95,6 +98,9 @@ class HybridPredictor:
         self.clip_bounds_filename = clip_bounds_filename or os.getenv(
             "ARTIFACT_CLIP_BOUNDS_FILENAME", "auto_clip_bounds.pkl"
         )
+        self.confidence_calibrator_filename = confidence_calibrator_filename or os.getenv(
+            "ARTIFACT_CONFIDENCE_CALIBRATOR_FILENAME", "confidence_calibrator.pkl"
+        )
 
         # Artéfacts (None tant que load_artifacts() n'a pas été appelée)
         self.autoencoder: Any = None
@@ -103,6 +109,7 @@ class HybridPredictor:
         self.imputer: Any = None
         self.clip_bounds: dict | None = None
         self.metadata: dict | None = None
+        self.confidence_calibrator: Any = None
 
         self.feature_names: list[str] = []
         self.ae_threshold: float = 0.0
@@ -176,6 +183,30 @@ class HybridPredictor:
             self.clip_bounds = self._load_pickle(
                 os.path.join(self.data_dir, self.clip_bounds_filename), self.clip_bounds_filename
             )
+
+            # Calibrateur de confiance (régression logistique, Platt scaling) :
+            # OPTIONNEL. Si absent ou corrompu, on logge un avertissement et on
+            # continue avec l'heuristique (_confidence_heuristic) — cet
+            # artéfact ne doit jamais empêcher le service de démarrer.
+            calibrator_path = os.path.join(self.ml_dir, self.confidence_calibrator_filename)
+            if os.path.exists(calibrator_path):
+                try:
+                    self.confidence_calibrator = joblib.load(calibrator_path)
+                    logger.info(
+                        "Calibrateur de confiance chargé (%s).", self.confidence_calibrator_filename
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Échec du chargement du calibrateur de confiance (%s): %s. "
+                        "Fallback sur l'heuristique.", self.confidence_calibrator_filename, exc,
+                    )
+                    self.confidence_calibrator = None
+            else:
+                logger.warning(
+                    "Calibrateur de confiance introuvable (%s) : fallback sur l'heuristique.",
+                    calibrator_path,
+                )
+                self.confidence_calibrator = None
 
             self._loaded = True
             logger.info(
@@ -264,9 +295,7 @@ class HybridPredictor:
     def is_loaded(self) -> bool:
         return self._loaded
 
-    # ------------------------------------------------------------------ #
     # Preprocessing
-    # ------------------------------------------------------------------ #
     def _validate_and_order_features(self, payload: dict) -> np.ndarray:
         """Vérifie que toutes les features attendues sont présentes et les ordonne."""
         missing = [f for f in self.feature_names if f not in payload]
@@ -355,18 +384,29 @@ class HybridPredictor:
     # ------------------------------------------------------------------ #
     # Prédiction
     # ------------------------------------------------------------------ #
-    def _autoencoder_score(self, X_scaled: np.ndarray) -> float:
-        """Calcule le MSE de reconstruction de l'Autoencoder."""
-
-        # DEBUG TEMPORAIRE — retire ces 4 lignes après vérification
-        logger.info("DEBUG X_scaled shape: %s", X_scaled.shape)
-        logger.info("DEBUG X_scaled mean=%.4f std=%.4f min=%.4f max=%.4f",
-                    float(np.mean(X_scaled)), float(np.std(X_scaled)),
-                    float(np.min(X_scaled)), float(np.max(X_scaled)))
-
+    def _autoencoder_score(self, X_scaled: np.ndarray) -> tuple[float, np.ndarray]:
+        """Calcule le MSE de reconstruction de l'Autoencoder et renvoie la reconstruction."""
         reconstruction = self.autoencoder.predict(X_scaled, verbose=0)
         mse = float(np.mean(np.square(X_scaled - reconstruction)))
-        return mse
+        return mse, reconstruction
+
+    def _explain(self, X_scaled: np.ndarray, reconstruction: np.ndarray, top_n: int = 5) -> list[dict]:
+        """Identifie les features qui contribuent le plus à l'anomalie détectée."""
+        per_feature_error = np.square(X_scaled[0] - reconstruction[0])
+        z_scores = X_scaled[0]
+
+        ranked_idx = np.argsort(per_feature_error)[::-1][:top_n]
+
+        contributions = []
+        for idx in ranked_idx:
+            z = float(z_scores[idx])
+            contributions.append({
+                "feature": self.feature_names[idx],
+                "z_score": round(z, 3),
+                "reconstruction_error": round(float(per_feature_error[idx]), 6),
+                "direction": "high" if z > 0 else "low",
+            })
+        return contributions
 
     def _isolation_forest_score(self, X_scaled: np.ndarray) -> tuple[float, bool]:
         """
@@ -397,9 +437,41 @@ class HybridPredictor:
         if ae_flag and not if_flag:
             return "WARNING"
         return "NORMAL"
+    def _confidence(
+        self, ae_score: float, ae_threshold: float, ae_flag: bool, if_flag: bool, if_score: float
+    ) -> float:
+        """
+        Score de confiance calibré (régression logistique, Platt scaling)
+        entraîné sur données labellisées (voir ML/notebooks/confidence_calibration.ipynb).
 
+        Fallback automatique sur l'heuristique (_confidence_heuristic) si le
+        calibrateur n'est pas chargé, ou si un problème survient au moment
+        de l'inférence (ex: format d'entrée inattendu).
+        """
+        if self.confidence_calibrator is not None:
+            try:
+                ae_score_normalized = (
+                    (ae_score - ae_threshold) / ae_threshold if ae_threshold > 0
+                    else (ae_score - ae_threshold)
+                )
+                X = [[ae_score_normalized, if_score]]
+                p_anomaly = float(self.confidence_calibrator.predict_proba(X)[0][1])
+
+                # On veut "confiance dans LA décision prise", pas juste P(anomalie) :
+                # pour NORMAL, la confiance doit être haute quand P(anomalie) est basse.
+                decision = self._decide(ae_flag, if_flag)
+                p_decision = p_anomaly if decision != "NORMAL" else (1.0 - p_anomaly)
+
+                return round(float(np.clip(p_decision, 0.0, 1.0)), 4)
+            except Exception as exc:  # noqa: BLE001  # noqa: BLE001
+                logger.warning(
+                    "Échec du calibrateur de confiance à l'inférence: %s. Fallback sur l'heuristique.",
+                    exc,
+                )
+
+        return self._confidence_heuristic(ae_score, ae_threshold, ae_flag, if_flag)
     @staticmethod
-    def _confidence(ae_score: float, ae_threshold: float, ae_flag: bool, if_flag: bool) -> float:
+    def _confidence_heuristic(ae_score: float, ae_threshold: float, ae_flag: bool, if_flag: bool) -> float:
         """
         Score de confiance heuristique dans [0, 1].
 
@@ -410,9 +482,6 @@ class HybridPredictor:
         - désaccord (WARNING) -> la confiance reflète surtout l'incertitude
           du WARNING, donc elle est plafonnée plus bas.
 
-        NOTE: cette formule est une heuristique raisonnable mais n'est pas
-        spécifiée dans le cahier des charges d'origine. Ajuste-la si ton
-        équipe a une définition métier différente de "confidence".
         """
         # Distance relative au threshold, bornée à [0, 1]
         if ae_threshold > 0:
@@ -448,13 +517,14 @@ class HybridPredictor:
         X = self._validate_and_order_features(payload)
         X_scaled = self.preprocess(X)
 
-        ae_score = self._autoencoder_score(X_scaled)
+        ae_score, reconstruction = self._autoencoder_score(X_scaled)
         ae_flag = ae_score > self.ae_threshold
 
         if_score, if_flag = self._isolation_forest_score(X_scaled)
-
         decision = self._decide(ae_flag, if_flag)
-        confidence = self._confidence(ae_score, self.ae_threshold, ae_flag, if_flag)
+        confidence = self._confidence(ae_score, self.ae_threshold, ae_flag, if_flag, if_score)
+
+        top_contributing_features = self._explain(X_scaled, reconstruction) if decision != "NORMAL" else []
 
         elapsed_ms = (time.perf_counter() - start) * 1000.0
 
@@ -466,13 +536,14 @@ class HybridPredictor:
             "isolation_forest_flag": if_flag,
             "decision": decision,
             "confidence": confidence,
+            "top_contributing_features": top_contributing_features,
             "processing_time_ms": round(elapsed_ms, 3),
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
 
         logger.info(
-            "Prédiction: ae_score=%.6f ae_flag=%s if_score=%.6f if_flag=%s decision=%s time=%.2fms",
-            ae_score, ae_flag, if_score, if_flag, decision, elapsed_ms,
+            "Prédiction: ae_score=%.6f ae_flag=%s if_score=%.6f if_flag=%s decision=%s confidence=%.4f time=%.2fms",
+            ae_score, ae_flag, if_score, if_flag, decision, confidence, elapsed_ms,
         )
         envoyer_alerte(decision, ae_score, if_score, confidence)
 
