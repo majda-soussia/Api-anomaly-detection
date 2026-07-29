@@ -46,6 +46,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ acknowledged_by: acknowledgedBy }),
     }),
+  getPredictions: (params) => request(`/api/predictions${toQueryString(params)}`),
+  getPredictionsBreakdown: (params) => request(`/api/predictions/breakdown${toQueryString(params)}`),
   getHealth: () => request('/api/health'),
 };
 

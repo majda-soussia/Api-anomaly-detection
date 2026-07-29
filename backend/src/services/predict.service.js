@@ -59,17 +59,52 @@ async function saveAlert(prediction, features, explanation) {
   );
   return result.rows[0];
 }
+async function logPrediction(prediction, features) {
+  try {
+    await db.query(
+      `INSERT INTO predictions_log (
+         decision, confidence,
+         autoencoder_score, autoencoder_flag, autoencoder_threshold,
+         isolation_forest_score, isolation_forest_flag,
+         processing_time_ms, predicted_at,
+         server_id, avg_response_time, error_rate_5xx,
+         request_count, p95_response_time, raw_payload
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      [
+        prediction.decision,
+        prediction.confidence,
+        prediction.autoencoder_score,
+        prediction.autoencoder_flag,
+        prediction.autoencoder_threshold,
+        prediction.isolation_forest_score,
+        prediction.isolation_forest_flag,
+        prediction.processing_time_ms,
+        prediction.timestamp,
+        features.server_id ?? null,
+        features.avg_response_time ?? null,
+        features.error_rate_5xx ?? null,
+        features.request_count ?? null,
+        features.p95_response_time ?? null,
+        JSON.stringify(features),
+      ]
+    );
+  } catch (err) {
+    // Le journal ne doit JAMAIS faire échouer le pipeline de prédiction —
+    // une panne d'écriture ici est loggée mais n'impacte pas la réponse.
+    logger.error({ err: err.message }, '[PredictService] logPrediction failed');
+  }
+}
 /**
  * Pipeline: call ML service → decide → cooldown (per server+decision) →
  * persist → broadcast → invalidate list cache.
  */
 async function predict(features) {
   const prediction = await callMLService(features);
+  logPrediction(prediction, features);
 
   if (prediction.decision === 'NORMAL') {
     return { prediction, alert: null };
   }
-
   const inCooldown = await isInCooldown(prediction.decision, features.server_id);
   if (inCooldown) {
     logger.info(

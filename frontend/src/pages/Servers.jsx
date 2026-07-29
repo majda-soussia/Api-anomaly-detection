@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMetricsSocket } from "../hooks/useSocket";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
@@ -15,16 +16,180 @@ function StatusBadge({ status, isAnomaly }) {
   return <Badge tone="warning">{status?.toUpperCase() || "Unknown"}</Badge>;
 }
 
+function AddServerModal({ onClose, onCreated }) {
+  const [name, setName] = useState("");
+  const [environment, setEnvironment] = useState("production");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError("Le nom du serveur est requis.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/servers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, environment }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Échec de la création du serveur");
+      }
+      onCreated?.(json.data);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--bg-surface-raised, #fff)",
+          borderRadius: 8,
+          padding: "var(--space-6, 24px)",
+          width: 360,
+          maxWidth: "90vw",
+        }}
+      >
+        <h3 style={{ fontSize: 16, marginBottom: 16 }}>Ajouter un serveur</h3>
+        <form onSubmit={handleSubmit}>
+          <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>
+            Nom du serveur
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ex. Serveur 4"
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              marginBottom: 12,
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              fontSize: 13,
+            }}
+          />
+
+          <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>
+            Environnement
+          </label>
+          <select
+            value={environment}
+            onChange={(e) => setEnvironment(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              marginBottom: 16,
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              fontSize: 13,
+            }}
+          >
+            <option value="production">production</option>
+            <option value="staging">staging</option>
+            <option value="development">development</option>
+          </select>
+
+          {error && (
+            <p style={{ color: "var(--color-critical, #d33)", fontSize: 12, marginBottom: 12 }}>
+              {error}
+            </p>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "8px 14px",
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+                background: "transparent",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                padding: "8px 14px",
+                borderRadius: 6,
+                border: "none",
+                background: "var(--color-primary, #2563eb)",
+                color: "#fff",
+                fontSize: 13,
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.7 : 1,
+              }}
+            >
+              {submitting ? "Ajout..." : "Ajouter"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Servers() {
   const { metrics } = useMetricsSocket();
+  const [showAddModal, setShowAddModal] = useState(false);
 
   return (
     <div>
-      <div style={{ marginBottom: "var(--space-6)" }}>
-        <h2 style={{ fontSize: 20, marginBottom: 4 }}>État des serveurs</h2>
-        <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          Snapshot en temps réel de chaque serveur surveillé.
-        </p>
+      <div
+        style={{
+          marginBottom: "var(--space-6)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: 20, marginBottom: 4 }}>État des serveurs</h2>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            Snapshot en temps réel de chaque serveur surveillé.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 6,
+            border: "none",
+            background: "var(--color-primary, #2563eb)",
+            color: "#fff",
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          + Ajouter un serveur
+        </button>
       </div>
 
       <Card style={{ overflow: "hidden" }}>
@@ -89,6 +254,10 @@ export default function Servers() {
           />
         )}
       </Card>
+
+      {showAddModal && (
+        <AddServerModal onClose={() => setShowAddModal(false)} />
+      )}
     </div>
   );
 }

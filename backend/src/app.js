@@ -30,6 +30,8 @@ app.use('/api/metrics', metricsRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/predict', predictRoutes);
 app.use('/api/alerts', alertsRoutes);
+app.use('/api/predictions', require('./routes/predictions.routes'));
+app.use('/api/servers', require('./routes/servers.routes'));
 
 app.use(notFoundHandler);
 app.use(errorHandler);

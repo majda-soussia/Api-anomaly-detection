@@ -1,10 +1,17 @@
-const pool = require('../config/db');
-let rowsByServer = null;     
-let cursorByServer = null;  
+const db = require('../config/db');
+
+let rowsByServer = null;
+let cursorByServer = null;
+let historicalPool = null; // toutes les lignes confondues, sert à synthétiser
+
+let registeredServerIds = null; // ids actifs lus depuis la table `servers`
+let lastServersRefresh = 0;
+const SERVERS_REFRESH_INTERVAL_MS = 5000; // pas besoin de relire à chaque tick (2s)
+
 async function loadDataIfNeeded() {
   if (rowsByServer) return;
 
-  const { rows } = await pool.query(`
+  const { rows } = await db.query(`
     SELECT *
     FROM test_predictions
     ORDER BY server_id ASC, timestamp ASC;
@@ -12,6 +19,7 @@ async function loadDataIfNeeded() {
 
   rowsByServer = {};
   cursorByServer = {};
+  historicalPool = rows;
 
   for (const row of rows) {
     const id = row.server_id;
@@ -30,33 +38,73 @@ async function loadDataIfNeeded() {
 }
 
 /**
- * Renvoie UNE ligne par serveur (l'état courant du curseur de chacun),
- * puis avance chaque curseur d'un pas. Boucle automatiquement par serveur.
+ * Relit la liste des serveurs actifs depuis la table `servers` (throttlé,
+ * puisque l'emitter appelle getLatestMetrics() toutes les 2s).
+ */
+async function refreshRegisteredServersIfNeeded() {
+  const now = Date.now();
+  if (registeredServerIds && now - lastServersRefresh < SERVERS_REFRESH_INTERVAL_MS) return;
+
+  const { rows } = await db.query(
+    `SELECT id FROM servers WHERE is_active = true ORDER BY id ASC;`
+  );
+  registeredServerIds = rows.map((r) => r.id);
+  lastServersRefresh = now;
+}
+
+/**
+ * Un serveur ajouté manuellement n'a pas de vraies lignes dans test_predictions.
+ * On pioche une ligne au hasard dans l'historique global et on l'adapte :
+ * nouveau server_id, timestamp courant, et un bruit +/-10% sur les métriques
+ * numériques pour que ça ne soit pas un miroir exact d'un serveur existant.
+ */
+function synthesizeRowForServer(serverId) {
+  const template = historicalPool[Math.floor(Math.random() * historicalPool.length)];
+  const noise = () => 1 + (Math.random() - 0.5) * 0.2;
+
+  return {
+    ...template,
+    server_id: serverId,
+    timestamp: new Date().toISOString(),
+    request_count: Math.max(0, Math.round(template.request_count * noise())),
+    avg_response_time: +(template.avg_response_time * noise()).toFixed(2),
+    error_rate_5xx: Math.max(0, +(template.error_rate_5xx * noise()).toFixed(4)),
+  };
+}
+
+/**
+ * Renvoie UNE ligne par serveur actif (registre `servers`).
+ * - Serveur "réel" (présent dans test_predictions) : curseur qui avance, comme avant.
+ * - Serveur ajouté manuellement : ligne synthétisée à la volée.
  */
 async function getLatestMetrics() {
   await loadDataIfNeeded();
+  await refreshRegisteredServersIfNeeded();
 
-  const serverIds = Object.keys(rowsByServer);
-  if (serverIds.length === 0) return [];
+  const realServerIds = Object.keys(rowsByServer).map(Number);
+  const allServerIds = Array.from(new Set([...realServerIds, ...registeredServerIds]));
 
-  const result = serverIds.map((id) => {
-    const rows = rowsByServer[id];
-    const idx = cursorByServer[id];
-    const currentRow = rows[idx];
+  if (allServerIds.length === 0) return [];
 
-    // Avance le curseur de CE serveur, boucle à 0 s'il atteint la fin
-    cursorByServer[id] = (idx + 1) % rows.length;
-
-    return currentRow;
+  const result = allServerIds.map((id) => {
+    if (rowsByServer[id]) {
+      const rows = rowsByServer[id];
+      const idx = cursorByServer[id];
+      const currentRow = rows[idx];
+      cursorByServer[id] = (idx + 1) % rows.length;
+      return currentRow;
+    }
+    return synthesizeRowForServer(id);
   });
 
   return result;
 }
 
 /**
- * Historique : on garde les N derniers pas déjà "joués" pour CHAQUE serveur,
- * dans son propre référentiel de curseur (pas une fenêtre temporelle réelle,
- * puisque les timestamps du dataset ne sont pas liés à l'heure actuelle).
+ * Historique : uniquement pour les serveurs "réels" (curseur rejouable).
+ * Pour un serveur synthétique, il n'y a pas d'historique persistant à
+ * proprement parler puisque chaque tick est généré à la volée — on renvoie
+ * simplement ce qu'on a pour les serveurs réels, comme avant.
  */
 async function getMetricsHistory(limitSteps = 50) {
   await loadDataIfNeeded();
@@ -72,7 +120,6 @@ async function getMetricsHistory(limitSteps = 50) {
     result = result.concat(rows.slice(start, idx));
   }
 
-  // Trie par timestamp pour un affichage chronologique cohérent
   result.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   return result;
 }

@@ -14,6 +14,7 @@ const Overview = lazy(() => import('./pages/Overview'));
 const Servers  = lazy(() => import('./pages/Servers'));
 const Alerts   = lazy(() => import('./pages/Alerts'));
 const History  = lazy(() => import('./pages/History'));
+const Predictions = lazy(() => import('./pages/Predictions'));
 
 function PageFallback() {
   return (
@@ -46,6 +47,7 @@ function AppRoutes() {
                     <Route path="/servers"  element={<ProtectedRoute><Servers /></ProtectedRoute>} />
                     <Route path="/alerts"   element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
                     <Route path="/history"  element={<ProtectedRoute><History /></ProtectedRoute>} />
+                    <Route path="/predictions" element={<ProtectedRoute><Predictions /></ProtectedRoute>} />
                     <Route path="/"         element={<Navigate to="/overview" replace />} />
                     <Route path="*"         element={<Navigate to="/overview" replace />} />
                   </Routes>

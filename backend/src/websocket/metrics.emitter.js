@@ -23,6 +23,7 @@ function initMetricsEmitter(io, intervalMs = 2000) {
           '[MetricsEmitter] predict() failed'
         );
       });
+      });
       })
     );
     } catch (err) {

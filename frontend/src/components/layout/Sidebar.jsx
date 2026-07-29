@@ -9,11 +9,11 @@ import logoDark from "../../assets/logo-dark.png";
 import logoLight from "../../assets/logo-light.png";
 import logoDark2 from "../../assets/logo-dark2.png";
 
-
 const NAV_ITEMS = [
   { to: '/overview', label: 'Overview', icon: <DashboardIcon /> },
   { to: '/servers', label: 'Servers', icon: <StorageIcon /> },
-  { to: '/alerts', label: 'Alerts', icon: <NotificationImportantIcon /> , badge: true},
+  { to: '/alerts', label: 'Alerts', icon: <NotificationImportantIcon />, badge: true },
+  { to: '/predictions', label: 'Predictions', icon: <HistoryIcon /> },
 ];
 
 export default function Sidebar({ connected }) {
