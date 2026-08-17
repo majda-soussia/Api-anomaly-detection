@@ -23,14 +23,13 @@ function initMetricsEmitter(io, intervalMs = 2000) {
           '[MetricsEmitter] predict() failed'
         );
       });
-      });
       })
     );
     } catch (err) {
       logger.error({ err: err.message }, '[MetricsEmitter] error');
     }
   }, intervalMs);
-}
+  }
 
 function stopMetricsEmitter() {
   if (intervalHandle) {
